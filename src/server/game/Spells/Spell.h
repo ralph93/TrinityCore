@@ -335,8 +335,11 @@ class Spell
         void EffectActivateSpec(SpellEffIndex effIndex);
         void EffectPlayerNotification(SpellEffIndex effIndex);
         void EffectRemoveAura(SpellEffIndex effIndex);
+        void EffectDamageFromMaxHealthPCT(SpellEffIndex effIndex);
         void EffectCastButtons(SpellEffIndex effIndex);
         void EffectRechargeManaGem(SpellEffIndex effIndex);
+        void EffectGiveCurrency(SpellEffIndex effIndex);
+        void EffectResurrectWithAura(SpellEffIndex effIndex);
 
         typedef std::set<Aura*> UsedSpellMods;
 
