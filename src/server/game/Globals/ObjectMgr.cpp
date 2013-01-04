@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2012 TrinityCore <http://www.trinitycore.org/>
+ * Copyright (C) 2008-2013 TrinityCore <http://www.trinitycore.org/>
  * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -52,7 +52,6 @@
 #include "World.h"
 
 ScriptMapMap sSpellScripts;
-ScriptMapMap sGameObjectScripts;
 ScriptMapMap sEventScripts;
 ScriptMapMap sWaypointScripts;
 
@@ -62,7 +61,6 @@ std::string GetScriptsTableNameByType(ScriptsType type)
     switch (type)
     {
         case SCRIPTS_SPELL:         res = "spell_scripts";      break;
-        case SCRIPTS_GAMEOBJECT:    res = "gameobject_scripts"; break;
         case SCRIPTS_EVENT:         res = "event_scripts";      break;
         case SCRIPTS_WAYPOINT:      res = "waypoint_scripts";   break;
         default: break;
@@ -76,7 +74,6 @@ ScriptMapMap* GetScriptsMapByType(ScriptsType type)
     switch (type)
     {
         case SCRIPTS_SPELL:         res = &sSpellScripts;       break;
-        case SCRIPTS_GAMEOBJECT:    res = &sGameObjectScripts;  break;
         case SCRIPTS_EVENT:         res = &sEventScripts;       break;
         case SCRIPTS_WAYPOINT:      res = &sWaypointScripts;    break;
         default: break;
@@ -4609,18 +4606,6 @@ void ObjectMgr::LoadScripts(ScriptsType type)
     sLog->outInfo(LOG_FILTER_SERVER_LOADING, ">> Loaded %u script definitions in %u ms", count, GetMSTimeDiffToNow(oldMSTime));
 }
 
-void ObjectMgr::LoadGameObjectScripts()
-{
-    LoadScripts(SCRIPTS_GAMEOBJECT);
-
-    // check ids
-    for (ScriptMapMap::const_iterator itr = sGameObjectScripts.begin(); itr != sGameObjectScripts.end(); ++itr)
-    {
-        if (!GetGOData(itr->first))
-            sLog->outError(LOG_FILTER_SQL, "Table `gameobject_scripts` has not existing gameobject (GUID: %u) as script id", itr->first);
-    }
-}
-
 void ObjectMgr::LoadSpellScripts()
 {
     LoadScripts(SCRIPTS_SPELL);
@@ -5597,12 +5582,11 @@ WorldSafeLocsEntry const* ObjectMgr::GetClosestGraveYard(float x, float y, float
     //     then check faction
     //   if mapId != graveyard.mapId (ghost in instance) and search any graveyard associated
     //     then check faction
-    GraveYardContainer::const_iterator graveLow  = GraveYardStore.lower_bound(zoneId);
-    GraveYardContainer::const_iterator graveUp   = GraveYardStore.upper_bound(zoneId);
+    GraveYardMapBounds range = GraveYardStore.equal_range(zoneId);
     MapEntry const* map = sMapStore.LookupEntry(MapId);
-    // not need to check validity of map object; MapId _MUST_ be valid here
 
-    if (graveLow == graveUp && !map->IsBattleArena())
+    // not need to check validity of map object; MapId _MUST_ be valid here
+    if (range.first == range.second && !map->IsBattleArena())
     {
         sLog->outError(LOG_FILTER_SQL, "Table `game_graveyard_zone` incomplete: Zone %u Team %u does not have a linked graveyard.", zoneId, team);
         return GetDefaultGraveYard(team);
@@ -5623,9 +5607,9 @@ WorldSafeLocsEntry const* ObjectMgr::GetClosestGraveYard(float x, float y, float
 
     MapEntry const* mapEntry = sMapStore.LookupEntry(MapId);
 
-    for (GraveYardContainer::const_iterator itr = graveLow; itr != graveUp; ++itr)
+    for (; range.first != range.second; ++range.first)
     {
-        GraveYardData const& data = itr->second;
+        GraveYardData const& data = range.first->second;
 
         WorldSafeLocsEntry const* entry = sWorldSafeLocsStore.LookupEntry(data.safeLocId);
         if (!entry)
@@ -5703,15 +5687,13 @@ WorldSafeLocsEntry const* ObjectMgr::GetClosestGraveYard(float x, float y, float
 
 GraveYardData const* ObjectMgr::FindGraveYardData(uint32 id, uint32 zoneId)
 {
-    GraveYardContainer::const_iterator graveLow  = GraveYardStore.lower_bound(zoneId);
-    GraveYardContainer::const_iterator graveUp   = GraveYardStore.upper_bound(zoneId);
-
-    for (GraveYardContainer::const_iterator itr = graveLow; itr != graveUp; ++itr)
+    GraveYardMapBounds range = GraveYardStore.equal_range(zoneId);
+    for (; range.first != range.second; ++range.first)
     {
-        if (itr->second.safeLocId == id)
-            return &itr->second;
+        GraveYardData const& data = range.first->second;
+        if (data.safeLocId == id)
+            return &data;
     }
-
     return NULL;
 }
 
@@ -5744,9 +5726,8 @@ bool ObjectMgr::AddGraveYardLink(uint32 id, uint32 zoneId, uint32 team, bool per
 
 void ObjectMgr::RemoveGraveYardLink(uint32 id, uint32 zoneId, uint32 team, bool persist /*= false*/)
 {
-    GraveYardContainer::iterator graveLow  = GraveYardStore.lower_bound(zoneId);
-    GraveYardContainer::iterator graveUp   = GraveYardStore.upper_bound(zoneId);
-    if (graveLow == graveUp)
+    GraveYardMapBoundsNonConst range = GraveYardStore.equal_range(zoneId);
+    if (range.first == range.second)
     {
         //sLog->outError(LOG_FILTER_SQL, "Table `game_graveyard_zone` incomplete: Zone %u Team %u does not have a linked graveyard.", zoneId, team);
         return;
@@ -5754,11 +5735,10 @@ void ObjectMgr::RemoveGraveYardLink(uint32 id, uint32 zoneId, uint32 team, bool 
 
     bool found = false;
 
-    GraveYardContainer::iterator itr;
 
-    for (itr = graveLow; itr != graveUp; ++itr)
+    for (; range.first != range.second; ++range.first)
     {
-        GraveYardData & data = itr->second;
+        GraveYardData & data = range.first->second;
 
         // skip not matching safezone id
         if (data.safeLocId != id)
@@ -5778,7 +5758,7 @@ void ObjectMgr::RemoveGraveYardLink(uint32 id, uint32 zoneId, uint32 team, bool 
         return;
 
     // remove from links
-    GraveYardStore.erase(itr);
+    GraveYardStore.erase(range.first);
 
     // remove link from DB
     if (persist)

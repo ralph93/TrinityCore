@@ -1,6 +1,5 @@
 /*
- * Copyright (C) 2008-2010 TrinityCore <http://www.trinitycore.org/>
- * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
+ * Copyright (C) 2008-2013 TrinityCore <http://www.trinitycore.org/>
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -52,7 +51,7 @@ void BattlefieldMgr::InitBattlefield()
     /* For Cataclysm: Tol Barad
        pBf = new BattlefieldTB;
        // respawn, init variables
-       if(!pBf->SetupBattlefield())
+       if (!pBf->SetupBattlefield())
        {
        sLog->outDebug(LOG_FILTER_BATTLEFIELD, "Battlefield : Tol Barad init failed.");
        delete pBf;
